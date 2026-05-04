@@ -41,6 +41,14 @@ def list_invoices() -> list[InvoiceExtracted]:
     return repo.list_invoices()
 
 
+@app.get("/invoices/{invoice_id}", response_model=InvoiceExtracted)
+def get_invoice(invoice_id: str) -> InvoiceExtracted:
+    try:
+        return repo.get_invoice(invoice_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Invoice not found") from exc
+
+
 @app.post("/invoices/scan", response_model=list[InvoiceExtracted])
 async def scan_invoices(files: list[UploadFile] = File(...)) -> list[InvoiceExtracted]:
     if not files:

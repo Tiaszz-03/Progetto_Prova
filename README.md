@@ -37,10 +37,11 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-#### Terminale B - Frontend (Vue + Vite)
+#### Terminale B - Frontend (React + Vite + Tailwind, UI tipo FreightAgent)
 
 ```bash
 cd "/Users/(utente)/Desktop/Progetto_Prova/frontend"
+cp .env.example .env   # opzionale: imposta VITE_API_BASE_URL se il backend non è su :8000
 npm install
 npm run dev
 ```
@@ -57,7 +58,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-#### Terminale B - Frontend (Vue + Vite)
+#### Terminale B - Frontend (React + Vite)
 
 ```powershell
 cd "C:\path\to\Progetto_Prova\frontend"
@@ -80,18 +81,16 @@ Frontend disponibile di default su `http://localhost:5173`
 
 ## Come usare l'app
 
-1. Apri il frontend nel browser.
-2. Clicca `Choose files` e seleziona uno o più PDF.
-3. Clicca `Scan`.
-4. La tabella mostra una riga per invoice (con deduplica).
-5. Per ogni riga:
-   - `Download PDF` scarica il documento originale
-   - `Export Excel` scarica l'xlsx della singola invoice
+1. Apri il frontend nel browser (`http://localhost:5173`).
+2. Clicca **+ New Shipment** (in alto a destra), seleziona uno o più PDF: vengono inviati al backend e analizzati.
+3. Nella dashboard vedi una riga per documento (deduplica lato backend); apri il dettaglio con la freccia.
+4. Nel dettaglio puoi usare ancora i passi demo con **Gemini** (opzionale: `GEMINI_API_KEY` in `frontend/.env`) per simulazioni; i dati estratti da PDF arrivano dall’API FastAPI.
 
 ## API disponibili
 
 - `GET /health`
 - `GET /invoices`
+- `GET /invoices/{id}`
 - `POST /invoices/scan` (multipart form-data, campo `files`)
 - `GET /invoices/{id}/download`
 - `GET /invoices/{id}/excel`
@@ -100,7 +99,7 @@ Frontend disponibile di default su `http://localhost:5173`
 
 - I file caricati vengono salvati in `backend/data/invoices/`.
 - Il sistema deduplica i documenti uguali per contenuto.
-- Se un campo non è presente nel PDF, in UI appare `not provided`.
+- UI allineata al progetto di riferimento in `freight-forwarding-operation-agent/` (React + Tailwind v4).
 
 ## Troubleshooting rapido
 

@@ -1,20 +1,30 @@
 {
   "name": "customs-invoice-frontend",
-  "version": "1.0.0",
   "private": true,
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5.13"
+    "@google/genai": "^1.29.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "react-router-dom": "^7.14.2",
+    "tailwind-merge": "^3.5.0",
+    "vite": "^6.2.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.1",
-    "typescript": "^5.8.3",
-    "vite": "^5.4.19",
-    "vue-tsc": "^2.2.12"
+    "@types/node": "^22.14.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2"
   }
 }
