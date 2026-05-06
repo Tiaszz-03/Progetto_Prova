@@ -15,10 +15,10 @@ import {
   ClipboardList,
   ExternalLink
 } from "lucide-react";
-import { MOCK_SHIPMENTS, RAW_DOC_EXAMPLES } from "../constants";
+import { RAW_DOC_EXAMPLES } from "../constants";
 import { Shipment, ShipmentStepStatus, DocumentType } from "../types";
 import { extractDataFromDocument } from "../services/geminiService";
-import { fetchInvoice } from "../services/invoiceApi";
+import { fetchInvoice, getInvoiceExcelUrl } from "../services/invoiceApi";
 import { invoiceToShipment } from "../invoiceAdapter";
 
 export function ShipmentDetails() {
@@ -39,8 +39,7 @@ export function ShipmentDetails() {
         const inv = await fetchInvoice(id);
         if (!cancelled) setShipment(invoiceToShipment(inv));
       } catch {
-        const mock = MOCK_SHIPMENTS.find((s) => s.id === id);
-        if (!cancelled) setShipment(mock);
+        if (!cancelled) setShipment(undefined);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -117,6 +116,11 @@ export function ShipmentDetails() {
     alert("Data inserted successfully in ERP via API!");
   };
 
+  const handleExportReport = () => {
+    if (!id) return;
+    window.open(getInvoiceExcelUrl(id), "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-20">
       <Link to="/" className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors font-medium">
@@ -133,7 +137,12 @@ export function ShipmentDetails() {
           </div>
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+          <button
+            type="button"
+            onClick={handleExportReport}
+            disabled={!id}
+            className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download className="w-4 h-4" /> Export Report
           </button>
           <button className="px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-md">

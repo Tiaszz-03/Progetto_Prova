@@ -1,4 +1,3 @@
-import type { ChangeEvent, RefObject } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Search, Filter, Loader2 } from "lucide-react";
@@ -7,16 +6,34 @@ import { fetchInvoices, scanInvoices } from "../services/invoiceApi";
 import { invoiceToShipment } from "../invoiceAdapter";
 import type { Shipment } from "../types";
 
-export function ShipmentDashboard({
-  uploadInputRef,
-}: {
-  uploadInputRef: RefObject<HTMLInputElement | null>;
-}) {
+const AVAILABLE_DOCUMENTS = [
+  "E80 Group, Inc. inv. 1026001432 (1).pdf",
+  "Allegato_CAx_20260327172614532 (2).pdf",
+  "Allegato_CA_20260327172814503 (1).pdf",
+  "FACTURE PROFORMA TOTALE (1).pdf",
+];
+
+function toDocumentUrl(fileName: string): string {
+  return `/${encodeURI(fileName)}`;
+}
+
+async function loadDocumentAsFile(fileName: string): Promise<File> {
+  const response = await fetch(toDocumentUrl(fileName));
+  if (!response.ok) {
+    throw new Error(`Unable to load document "${fileName}" (${response.status})`);
+  }
+  const blob = await response.blob();
+  return new File([blob], fileName, { type: "application/pdf" });
+}
+
+export function ShipmentDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newShipmentOpen, setNewShipmentOpen] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,30 +53,27 @@ export function ShipmentDashboard({
     void load();
   }, [load]);
 
-  const onUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const list = e.target.files;
-    const files: File[] = [];
-    if (list) {
-      for (let i = 0; i < list.length; i++) {
-        const f = list.item(i);
-        if (f && f.name.toLowerCase().endsWith(".pdf")) {
-          files.push(f);
-        }
-      }
-    }
-    e.target.value = "";
-    if (!files.length) return;
-
+  const runSelectedScan = async () => {
+    if (!selectedDocuments.length) return;
     setScanning(true);
     setError(null);
     try {
+      const files = await Promise.all(selectedDocuments.map((name) => loadDocumentAsFile(name)));
       await scanInvoices(files);
       await load();
+      setNewShipmentOpen(false);
+      setSelectedDocuments([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
     }
+  };
+
+  const toggleDocumentSelection = (fileName: string) => {
+    setSelectedDocuments((prev) =>
+      prev.includes(fileName) ? prev.filter((doc) => doc !== fileName) : [...prev, fileName],
+    );
   };
 
   const filtered = shipments.filter((s) => {
@@ -78,15 +92,6 @@ export function ShipmentDashboard({
 
   return (
     <div className="space-y-6">
-      <input
-        ref={uploadInputRef}
-        type="file"
-        accept=".pdf,application/pdf"
-        multiple
-        className="hidden"
-        onChange={onUpload}
-      />
-
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
@@ -94,9 +99,16 @@ export function ShipmentDashboard({
       )}
 
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
+        <div className="space-y-3">
           <h2 className="text-2xl font-bold">Operation Dashboard</h2>
           <p className="text-slate-500 text-sm">Monitor and manage all active shipments.</p>
+          <button
+            type="button"
+            onClick={() => setNewShipmentOpen((current) => !current)}
+            className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+          >
+            + New Shipment
+          </button>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -125,6 +137,38 @@ export function ShipmentDashboard({
           )}
         </div>
       </div>
+      {newShipmentOpen && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Select the documents to scan
+          </p>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+            {AVAILABLE_DOCUMENTS.map((doc) => (
+              <label key={doc} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={selectedDocuments.includes(doc)}
+                  onChange={() => toggleDocumentSelection(doc)}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs text-slate-700 break-all">{doc}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void runSelectedScan()}
+            disabled={scanning || selectedDocuments.length === 0}
+            className={`mt-4 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
+              scanning || selectedDocuments.length === 0
+                ? "cursor-not-allowed bg-emerald-300"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            }`}
+          >
+            {scanning ? "Scanning with GPT..." : "Start GPT Scan"}
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
         {loading ? (
@@ -238,11 +282,20 @@ export function ShipmentDashboard({
             </tbody>
           </table>
         )}
-        {!loading && filtered.length === 0 && (
+        {!loading && shipments.length === 0 && (
+          <div className="py-20 text-center text-slate-400">
+            <Search className="w-10 h-10 mx-auto mb-4 opacity-10" />
+            <p>No documents have been scanned yet.</p>
+            <p className="text-sm mt-2">
+              Please select and scan at least one document to see the outcome.
+            </p>
+          </div>
+        )}
+        {!loading && shipments.length > 0 && filtered.length === 0 && (
           <div className="py-20 text-center text-slate-400">
             <Search className="w-10 h-10 mx-auto mb-4 opacity-10" />
             <p>No shipments match your filter criteria.</p>
-            <p className="text-sm mt-2">Use + New Shipment to upload PDF invoices.</p>
+            <p className="text-sm mt-2">Use + New Shipment to scan selected PDF documents.</p>
           </div>
         )}
       </div>

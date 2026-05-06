@@ -79,12 +79,25 @@ Health check: `http://localhost:8000/health`
 
 Frontend disponibile di default su `http://localhost:5173`
 
-## Come usare l'app
+## Come funziona l'app (flow attuale)
 
 1. Apri il frontend nel browser (`http://localhost:5173`).
-2. Clicca **+ New Shipment** (in alto a destra), seleziona uno o più PDF: vengono inviati al backend e analizzati.
-3. Nella dashboard vedi una riga per documento (deduplica lato backend); apri il dettaglio con la freccia.
-4. Nel dettaglio puoi usare ancora i passi demo con **Gemini** (opzionale: `GEMINI_API_KEY` in `frontend/.env`) per simulazioni; i dati estratti da PDF arrivano dall’API FastAPI.
+2. Nella sidebar trovi:
+   - **Shipments**: dashboard con risultati estratti
+   - **Documents**: elenco dei PDF sorgente apribili in nuova tab
+3. In **Shipments**, clicca **+ New Shipment**:
+   - si apre il pannello con i documenti disponibili
+   - seleziona uno o più file PDF
+   - il bottone verde **Start GPT Scan** resta disabilitato finché non selezioni almeno un file
+4. Clicca **Start GPT Scan**:
+   - il frontend legge i PDF dalla cartella `files/`
+   - invia i file al backend (`POST /invoices/scan`)
+   - il backend estrae i dati con OpenAI e salva i PDF in `backend/data/invoices/`
+5. Al termine della scansione:
+   - la tabella in dashboard mostra i record estratti
+   - se non c'è nessuna scansione, appare il messaggio:
+     `No documents have been scanned yet. Please select and scan at least one document to see the outcome.`
+6. Aprendo una riga (freccia a destra) vai nel dettaglio shipment, dove il bottone **Export Report** scarica l'Excel di quel record (`GET /invoices/{id}/excel`).
 
 ## API disponibili
 
@@ -97,7 +110,9 @@ Frontend disponibile di default su `http://localhost:5173`
 
 ## Note utili
 
-- I file caricati vengono salvati in `backend/data/invoices/`.
+- I PDF sorgente usati dal frontend sono in `files/` (root progetto).
+- `frontend/vite.config.ts` usa `publicDir: "../files"` per servire quei PDF.
+- I file scansionati vengono salvati in `backend/data/invoices/`.
 - Il sistema deduplica i documenti uguali per contenuto.
 - UI allineata al progetto di riferimento in `freight-forwarding-operation-agent/` (React + Tailwind v4).
 
@@ -109,3 +124,7 @@ Frontend disponibile di default su `http://localhost:5173`
   - verifica che FastAPI sia avviato su `http://localhost:8000`
 - Se lo scan fallisce:
   - controlla che `OPENAI_API_KEY` sia valorizzata in `backend/.env`
+- Se vedi ancora righe "vecchie" in dashboard:
+  - svuota `backend/data/invoices/` e riavvia backend
+- Se un PDF non si apre in **Documents**:
+  - verifica che il file esista davvero in `files/` con lo stesso nome mostrato in UI
