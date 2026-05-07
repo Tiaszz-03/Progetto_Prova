@@ -3,7 +3,9 @@
 Sistema full-stack per:
 - upload/scansione di PDF invoice
 - estrazione dati strutturati con OpenAI
-- visualizzazione in tabella
+- deduplica estrazioni via cache SHA256 persistente
+- grouping automatico documenti in shipment (invoice/DDT/packing/proforma)
+- visualizzazione dashboard operations con righe espandibili
 - download PDF originale + export Excel per riga
 
 ## Requisiti
@@ -90,11 +92,12 @@ Frontend disponibile di default su `http://localhost:5173`
    - seleziona uno o più file PDF
    - il bottone verde **Start GPT Scan** resta disabilitato finché non selezioni almeno un file
 4. Clicca **Start GPT Scan**:
-   - il frontend legge i PDF dalla cartella `backend/files/`
+   - il frontend legge i PDF dalla cartella `backend/files/invoices/`
    - invia i file al backend (`POST /invoices/scan`)
-   - il backend estrae i dati con OpenAI e salva i PDF in `backend/files/invoices/`
+   - il backend calcola SHA256, controlla cache, e chiama OpenAI solo in `CACHE MISS`
+   - i PDF vengono salvati/aggiornati in `backend/files/invoices/` senza duplicati hashati
 5. Al termine della scansione:
-   - la tabella in dashboard mostra i record estratti
+   - la dashboard mostra shipment raggruppate con documenti correlati espandibili
    - se non c'è nessuna scansione, appare il messaggio:
      `No documents have been scanned yet. Please select and scan at least one document to see the outcome.`
 6. Aprendo una riga (freccia a destra) vai nel dettaglio shipment, dove il bottone **Export Report** scarica l'Excel di quel record (`GET /invoices/{id}/excel`).
@@ -102,9 +105,11 @@ Frontend disponibile di default su `http://localhost:5173`
 ## API disponibili
 
 - `GET /health`
-- `GET /invoices`
+- `GET /invoices` (supporta filtri query: `customer`, `destination_country`, `hs_code`, `min_weight`, `max_weight`, `document_type`, `shipment_status`, `missing_fields`)
 - `GET /invoices/{id}`
 - `POST /invoices/scan` (multipart form-data, campo `files`)
+- `POST /invoices/scan/async`
+- `GET /invoices/scan/status/{job_id}`
 - `GET /invoices/{id}/download`
 - `GET /invoices/{id}/excel`
 
@@ -135,11 +140,16 @@ Deploy unificato su Firebase con un solo workflow:
 
 ## Note utili
 
-- I PDF sorgente usati dal frontend sono in `backend/files/`.
-- `frontend/vite.config.ts` usa `publicDir: "../backend/files"` per servire quei PDF in locale.
+- I PDF sorgente usati dal frontend sono in `backend/files/invoices/`.
+- `frontend/vite.config.ts` usa `publicDir: "../backend/files"`; i documenti vengono aperti via path `/invoices/<file>.pdf`.
 - I file scansionati vengono salvati in `backend/files/invoices/`.
+- Cache estrazioni persistente: `backend/files/invoices/.cache/cache.db`.
+- Tabelle cache/grouping in SQLite:
+  - `extraction_cache`
+  - `shipment_groups`
+  - `shipment_group_documents`
 - In Firebase Functions i file caricati vengono salvati in `/tmp/invoices` (storage temporaneo dell'istanza).
-- Il sistema deduplica i documenti uguali per contenuto.
+- Il sistema deduplica estrazioni per contenuto file (`SHA256`) e non per nome file.
 - UI allineata al progetto di riferimento in `freight-forwarding-operation-agent/` (React + Tailwind v4).
 
 ## Troubleshooting rapido
@@ -150,7 +160,9 @@ Deploy unificato su Firebase con un solo workflow:
   - verifica che FastAPI sia avviato su `http://localhost:8000`
 - Se lo scan fallisce:
   - controlla che `OPENAI_API_KEY` sia valorizzata in `backend/.env`
+- Se vedi `ModuleNotFoundError: rapidfuzz`:
+  - esegui `pip install -r requirements.txt` in `backend/.venv`
 - Se vedi ancora righe "vecchie" in dashboard:
-  - svuota `backend/files/invoices/` e riavvia backend
+  - svuota cache SQLite (`extraction_cache`, `shipment_groups`, `shipment_group_documents`) e riavvia backend
 - Se un PDF non si apre in **Documents**:
-  - verifica che il file esista davvero in `backend/files/` con lo stesso nome mostrato in UI
+  - verifica che il file esista in `backend/files/invoices/` con lo stesso nome mostrato in UI
