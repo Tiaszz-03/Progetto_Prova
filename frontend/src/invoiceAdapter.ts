@@ -1,27 +1,47 @@
 import type { InvoiceExtracted } from "./services/invoiceApi";
 import { Shipment, ShipmentStepStatus } from "./types";
 
+function firstAddressLine(value?: string | null): string {
+  if (!value) return "";
+  return value.split(/[,\n]/)[0]?.trim() || "";
+}
+
 export function invoiceToShipment(inv: InvoiceExtracted): Shipment {
   const invDate = inv.invoice_date || "";
-  const origin =
-    inv.shipper?.address?.split(/[,\n]/)[0]?.trim() || "—";
+  const origin = firstAddressLine(inv.shipper?.address) || inv.shipper?.name || "—";
+  const destination =
+    firstAddressLine(inv.delivery_party?.address) ||
+    inv.delivery_party?.name ||
+    firstAddressLine(inv.consignee?.address) ||
+    inv.consignee?.name ||
+    "—";
 
   return {
     id: inv.id,
+    shipmentGroupId: inv.shipment_group_id ?? undefined,
+    documentType: inv.document_type ?? undefined,
+    shipmentStatus: inv.shipment_status ?? undefined,
+    relatedDocuments: (inv.related_documents ?? []).map((doc) => ({
+      id: doc.id,
+      fileName: doc.file_name,
+      documentType: doc.document_type,
+      documentNumber: doc.document_number,
+    })),
     fileNumber:
       inv.invoice_number ||
+      inv.customer_reference ||
       inv.file_name.replace(/\.pdf$/i, "") ||
       inv.file_name,
     shipper: inv.shipper?.name || "—",
     origin,
-    destination: inv.consignee?.name || "—",
+    destination,
     vessel: undefined,
     etd: invDate || undefined,
     createdAt: invDate || new Date().toISOString().slice(0, 10),
     steps: [
       {
-        id: "step-open",
-        name: "Open the file",
+        id: "step-uploaded",
+        name: "Uploaded",
         status: ShipmentStepStatus.COMPLETED,
         completedAt: invDate || undefined,
         output: `Received: ${inv.file_name}`,
@@ -29,19 +49,20 @@ export function invoiceToShipment(inv: InvoiceExtracted): Shipment {
         extractedData: { fileName: inv.file_name },
       },
       {
-        id: "step-booking",
-        name: "Booking Confirmation",
-        status: ShipmentStepStatus.NOT_STARTED,
-      },
-      {
-        id: "step-invoice",
-        name: "Client Invoice",
+        id: "step-extracted",
+        name: "Extracted",
         status: ShipmentStepStatus.COMPLETED,
         completedAt: invDate || undefined,
-        output: "Invoice extracted",
+        output: `${inv.document_type || "unknown"} extracted`,
         originalSource: "pdf",
         extractedData: {
+          documentType: inv.document_type,
           consignee: inv.consignee?.name,
+          consigneeAddress: inv.consignee?.address,
+          deliveryParty: inv.delivery_party?.name,
+          deliveryAddress: inv.delivery_party?.address,
+          billToParty: inv.bill_to_party?.name,
+          billToAddress: inv.bill_to_party?.address,
           shipperName: inv.shipper?.name,
           htsCode: inv.hs_code,
           descriptionOfGoods: inv.goods_description,
@@ -55,18 +76,30 @@ export function invoiceToShipment(inv: InvoiceExtracted): Shipment {
           invoiceDate: inv.invoice_date,
           volume: inv.volume,
           shipperAddress: inv.shipper?.address,
-          consigneeAddress: inv.consignee?.address,
           vatOrEori: inv.shipper?.vat_or_eori,
         },
       },
       {
-        id: "step-packing",
-        name: "Packing List",
+        id: "step-matched",
+        name: "Matched",
+        status:
+          inv.shipment_group_id || (inv.related_documents?.length ?? 0) > 0
+            ? ShipmentStepStatus.COMPLETED
+            : ShipmentStepStatus.NOT_STARTED,
+      },
+      {
+        id: "step-booking",
+        name: "Booking Confirmation",
         status: ShipmentStepStatus.NOT_STARTED,
       },
       {
-        id: "step-send",
-        name: "Send Instructions",
+        id: "step-customs",
+        name: "Customs Clearance",
+        status: ShipmentStepStatus.NOT_STARTED,
+      },
+      {
+        id: "step-delivered",
+        name: "Delivered",
         status: ShipmentStepStatus.NOT_STARTED,
       },
     ],

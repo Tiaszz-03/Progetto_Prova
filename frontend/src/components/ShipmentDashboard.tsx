@@ -1,20 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Search, Filter, Loader2 } from "lucide-react";
-import { ShipmentStepStatus } from "../types";
-import { fetchInvoices, scanInvoices } from "../services/invoiceApi";
+import { ArrowRight, ChevronDown, ChevronRight, Filter, Loader2, Search } from "lucide-react";
+import { ShipmentStepStatus, type Shipment } from "../types";
+import { fetchInvoices, scanInvoices, type InvoiceFilters } from "../services/invoiceApi";
 import { invoiceToShipment } from "../invoiceAdapter";
-import type { Shipment } from "../types";
 
 const AVAILABLE_DOCUMENTS = [
   "E80 Group, Inc. inv. 1026001432 (1).pdf",
-  "Allegato_CAx_20260327172614532 (2).pdf",
-  "Allegato_CA_20260327172814503 (1).pdf",
+  "Allegato_CAx_20260327172614532.pdf",
+  "Allegato_CA_20260327172814503.pdf",
   "FACTURE PROFORMA TOTALE (1).pdf",
 ];
 
 function toDocumentUrl(fileName: string): string {
-  return `/${encodeURI(fileName)}`;
+  return `/invoices/${encodeURI(fileName)}`;
 }
 
 async function loadDocumentAsFile(fileName: string): Promise<File> {
@@ -22,7 +21,18 @@ async function loadDocumentAsFile(fileName: string): Promise<File> {
   if (!response.ok) {
     throw new Error(`Unable to load document "${fileName}" (${response.status})`);
   }
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
   const blob = await response.blob();
+  const bytes = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  const pdfSignature = String.fromCharCode(...bytes);
+  const looksLikePdf = pdfSignature === "%PDF-";
+  const looksLikeHtml = contentType.includes("text/html");
+  if (!looksLikePdf || looksLikeHtml) {
+    throw new Error(
+      `Document "${fileName}" is not being served as a valid PDF. ` +
+        "Check that the file exists in backend/files/invoices and restart frontend dev server.",
+    );
+  }
   return new File([blob], fileName, { type: "application/pdf" });
 }
 
@@ -34,12 +44,16 @@ export function ShipmentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [newShipmentOpen, setNewShipmentOpen] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<InvoiceFilters>({});
+  const inFlightScanKeyRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const invoices = await fetchInvoices();
+      const invoices = await fetchInvoices(filters);
       setShipments(invoices.map(invoiceToShipment));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load invoices");
@@ -47,7 +61,7 @@ export function ShipmentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => {
     void load();
@@ -55,6 +69,11 @@ export function ShipmentDashboard() {
 
   const runSelectedScan = async () => {
     if (!selectedDocuments.length) return;
+    const scanKey = [...selectedDocuments].sort().join("|");
+    if (scanning || inFlightScanKeyRef.current === scanKey) {
+      return;
+    }
+    inFlightScanKeyRef.current = scanKey;
     setScanning(true);
     setError(null);
     try {
@@ -67,6 +86,7 @@ export function ShipmentDashboard() {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
       setScanning(false);
+      inFlightScanKeyRef.current = null;
     }
   };
 
@@ -124,6 +144,7 @@ export function ShipmentDashboard() {
           </div>
           <button
             type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
             className="p-2 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 transition-colors shadow-sm"
             aria-label="Filter"
           >
@@ -137,6 +158,26 @@ export function ShipmentDashboard() {
           )}
         </div>
       </div>
+      {filtersOpen && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+            <input className="rounded border border-slate-200 px-3 py-2 text-xs" placeholder="Customer" value={filters.customer ?? ""} onChange={(e) => setFilters((f) => ({ ...f, customer: e.target.value }))} />
+            <input className="rounded border border-slate-200 px-3 py-2 text-xs" placeholder="Destination country" value={filters.destination_country ?? ""} onChange={(e) => setFilters((f) => ({ ...f, destination_country: e.target.value }))} />
+            <input className="rounded border border-slate-200 px-3 py-2 text-xs" placeholder="HS code" value={filters.hs_code ?? ""} onChange={(e) => setFilters((f) => ({ ...f, hs_code: e.target.value }))} />
+            <select className="rounded border border-slate-200 px-3 py-2 text-xs" value={filters.document_type ?? ""} onChange={(e) => setFilters((f) => ({ ...f, document_type: e.target.value || undefined }))}>
+              <option value="">All document types</option>
+              <option value="commercial_invoice">Commercial Invoice</option>
+              <option value="transport_document">Transport Document</option>
+              <option value="proforma_invoice">Proforma Invoice</option>
+              <option value="packing_list">Packing List</option>
+            </select>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={() => void load()} className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Apply filters</button>
+            <button type="button" onClick={() => { setFilters({}); }} className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">Reset</button>
+          </div>
+        </div>
+      )}
       {newShipmentOpen && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -202,14 +243,24 @@ export function ShipmentDashboard() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((shipment) => (
-                <tr key={shipment.id} className="hover:bg-slate-50/50 transition-colors">
+                <Fragment key={shipment.id}>
+                <tr className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="font-bold text-slate-900 group underline decoration-indigo-200 group-hover:decoration-indigo-500 transition-all">
-                      {shipment.fileNumber}
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setExpandedRows((p) => ({ ...p, [shipment.id]: !p[shipment.id] }))} className="rounded border border-slate-200 p-0.5 text-slate-500">
+                        {expandedRows[shipment.id] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      </button>
+                      <div className="font-bold text-slate-900 group underline decoration-indigo-200 group-hover:decoration-indigo-500 transition-all">
+                        {shipment.fileNumber}
+                      </div>
                     </div>
-                    <div className="text-[11px] font-medium text-slate-500 uppercase mt-0.5">
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[11px] font-medium uppercase text-slate-500">
                       {shipment.shipper}
+                      </span>
+                      <DocumentTypeBadge value={shipment.documentType || "unknown"} />
                     </div>
+                    <div className="text-[10px] text-slate-400">{shipment.shipmentGroupId || "Ungrouped shipment"}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -247,27 +298,7 @@ export function ShipmentDashboard() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    {(() => {
-                      const done = shipment.steps.filter(
-                        (s) => s.status === ShipmentStepStatus.COMPLETED,
-                      ).length;
-                      const total = shipment.steps.length;
-                      const missing = shipment.steps
-                        .filter((s) => s.status !== ShipmentStepStatus.COMPLETED)
-                        .map((s) => s.name);
-                      return (
-                        <div>
-                          <div className="text-xs font-bold text-slate-900">
-                            {done} / {total} Done
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[150px]">
-                            {missing.length > 0 ? `Await: ${missing.join(", ")}` : "All complete"}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </td>
+                  <td className="px-6 py-4"><WorkflowTimeline shipment={shipment} /></td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       to={`/shipment/${shipment.id}`}
@@ -278,6 +309,25 @@ export function ShipmentDashboard() {
                     </Link>
                   </td>
                 </tr>
+                {expandedRows[shipment.id] && (
+                  <tr className="bg-slate-50/60">
+                    <td colSpan={6} className="px-6 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Related documents</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(shipment.relatedDocuments ?? []).length === 0 ? (
+                          <span className="text-xs text-slate-400">No linked docs</span>
+                        ) : (
+                          (shipment.relatedDocuments ?? []).map((doc) => (
+                            <span key={doc.id} className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700">
+                              {doc.documentNumber || doc.fileName} - {doc.documentType || "unknown"}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -322,6 +372,30 @@ export function ShipmentDashboard() {
       </div>
     </div>
   );
+}
+
+function WorkflowTimeline({ shipment }: { shipment: Shipment }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shipment.steps.map((step) => (
+        <span key={step.id} className={`rounded-full px-2 py-0.5 text-[10px] ${step.status === ShipmentStepStatus.COMPLETED ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+          {step.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DocumentTypeBadge({ value }: { value: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    commercial_invoice: { label: "Commercial Invoice", cls: "bg-slate-100 text-slate-700 border-slate-200" },
+    transport_document: { label: "Transport Document", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    proforma_invoice: { label: "Proforma Invoice", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    packing_list: { label: "Packing List", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    unknown: { label: "Unknown", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+  };
+  const item = map[value] || map.unknown;
+  return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${item.cls}`}>{item.label}</span>;
 }
 
 function StatCard({

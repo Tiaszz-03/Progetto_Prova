@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -13,10 +14,16 @@ from app.extraction import _display_file_name
 from app.repository import InvoiceRepository
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 INVOICES_DIR = Path("/tmp/invoices")
 INVOICES_DIR.mkdir(parents=True, exist_ok=True)
 repo = InvoiceRepository(INVOICES_DIR)
+
+
+def _is_pdf_bytes(content: bytes) -> bool:
+    # PDF magic number: "%PDF-"
+    return len(content) >= 5 and content[:5] == b"%PDF-"
 
 
 def _invoice_to_dict(invoice: Any) -> dict[str, Any]:
@@ -57,6 +64,16 @@ def _handle_request(req: Request) -> Response:
             content = file.read()
             if not content:
                 continue
+            if not _is_pdf_bytes(content):
+                return _json_response(
+                    {
+                        "detail": (
+                            f'Invalid PDF content for "{filename}". '
+                            "The uploaded file is not a real PDF (likely HTML/text fallback)."
+                        )
+                    },
+                    400,
+                )
             invoice_id = repo.save_uploaded_pdf(filename, content)
             try:
                 out.append(_invoice_to_dict(repo.get_invoice(invoice_id)))

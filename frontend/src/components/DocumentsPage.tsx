@@ -1,12 +1,12 @@
 const DOCUMENT_NAMES = [
   "E80 Group, Inc. inv. 1026001432 (1).pdf",
-  "Allegato_CAx_20260327172614532 (2).pdf",
-  "Allegato_CA_20260327172814503 (1).pdf",
+  "Allegato_CAx_20260327172614532.pdf",
+  "Allegato_CA_20260327172814503.pdf",
   "FACTURE PROFORMA TOTALE (1).pdf",
 ];
 
 function toDocumentUrl(fileName: string): string {
-  return `/${encodeURI(fileName)}`;
+  return `/invoices/${encodeURI(fileName)}`;
 }
 
 export function DocumentsPage() {

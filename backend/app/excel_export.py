@@ -10,11 +10,16 @@ from .models import InvoiceExtracted
 
 EXCEL_COLUMNS = [
     "File Name",
+    "Document Type",
     "Invoice Number",
     "Customer Reference",
     "Invoice Date",
     "Shipper Name",
     "Consignee Name",
+    "Delivery Party",
+    "Delivery Address",
+    "Bill To Party",
+    "Bill To Address",
     "HS Code",
     "Goods Description",
     "Gross Weight (kg)",
@@ -32,11 +37,16 @@ def build_invoice_excel(invoice: InvoiceExtracted) -> bytes:
     sheet.append(
         [
             invoice.file_name,
+            invoice.document_type,
             invoice.invoice_number,
             invoice.customer_reference,
             invoice.invoice_date.isoformat() if invoice.invoice_date else None,
             invoice.shipper.name,
             invoice.consignee.name,
+            invoice.delivery_party.name,
+            invoice.delivery_party.address,
+            invoice.bill_to_party.name,
+            invoice.bill_to_party.address,
             invoice.hs_code,
             invoice.goods_description,
             invoice.gross_weight_kg,

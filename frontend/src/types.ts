@@ -22,6 +22,15 @@ export interface ShipmentStep {
 
 export interface Shipment {
   id: string;
+  shipmentGroupId?: string;
+  documentType?: string;
+  relatedDocuments?: Array<{
+    id: string;
+    fileName: string;
+    documentType: string | null;
+    documentNumber: string | null;
+  }>;
+  shipmentStatus?: string;
   fileNumber: string;
   shipper: string;
   origin: string;

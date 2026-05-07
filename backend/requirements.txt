@@ -7,3 +7,4 @@ openai
 openpyxl
 pydantic
 python-multipart
+rapidfuzz
