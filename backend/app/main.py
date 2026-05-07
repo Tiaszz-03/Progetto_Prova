@@ -16,7 +16,8 @@ from .extraction import _display_file_name
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-INVOICES_DIR = BASE_DIR / "data" / "invoices"
+FILES_DIR = BASE_DIR / "files"
+INVOICES_DIR = FILES_DIR / "invoices"
 INVOICES_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Customs Invoice Processor", version="1.0.0")

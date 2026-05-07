@@ -1,3 +1,5 @@
+firebase-functions
+flask
 fastapi
 uvicorn
 python-dotenv
